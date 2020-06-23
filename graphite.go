@@ -1,7 +1,7 @@
 package graphite
 
 import (
-	"bytes"
+	"bufio"
 	"fmt"
 	"log"
 	"net"
@@ -104,7 +104,11 @@ func (graphite *Graphite) sendMetrics(metrics []Metric) error {
 		return nil
 	}
 	zeroed_metric := Metric{} // ignore unintialized metrics
-	buf := bytes.NewBufferString("")
+	buf := bufio.NewWriter(graphite.conn)
+	prefix := ""
+	if graphite.Prefix != "" {
+		prefix = graphite.Prefix + "."
+	}
 	for _, metric := range metrics {
 		if metric == zeroed_metric {
 			continue // ignore unintialized metrics
@@ -112,21 +116,19 @@ func (graphite *Graphite) sendMetrics(metrics []Metric) error {
 		if metric.Timestamp == 0 {
 			metric.Timestamp = time.Now().Unix()
 		}
-		metric_name := ""
-		if graphite.Prefix != "" {
-			metric_name = fmt.Sprintf("%s.%s", graphite.Prefix, metric.Name)
-		} else {
-			metric_name = metric.Name
-		}
 		if graphite.Protocol == "udp" {
-			fmt.Fprintf(graphite.conn, "%s %s %d\n", metric_name, metric.Value, metric.Timestamp)
+			fmt.Fprintf(graphite.conn, "%s%s %v %d\n", prefix, metric.Name, metric.Value, metric.Timestamp)
 			continue
 		}
-		buf.WriteString(fmt.Sprintf("%s %s %d\n", metric_name, metric.Value, metric.Timestamp))
+		if buf.Available() < 512 {
+			if err := buf.Flush(); err != nil {
+				return err
+			}
+		}
+		fmt.Fprintf(graphite.conn, "%s%s %v %d\n", prefix, metric.Name, metric.Value, metric.Timestamp)
 	}
 	if graphite.Protocol == "tcp" {
-		_, err := graphite.conn.Write(buf.Bytes())
-		//fmt.Print("Sent msg:", buf.String(), "'")
+		err := buf.Flush()
 		if err != nil {
 			return err
 		}

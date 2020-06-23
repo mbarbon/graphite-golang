@@ -8,11 +8,11 @@ import (
 // Metric is a struct that defines the relevant properties of a graphite metric
 type Metric struct {
 	Name      string
-	Value     string
+	Value     interface{}
 	Timestamp int64
 }
 
-func NewMetric(name, value string, timestamp int64) Metric {
+func NewMetric(name string, value interface{}, timestamp int64) Metric {
 	return Metric{
 		Name:      name,
 		Value:     value,
